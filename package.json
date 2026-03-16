@@ -1,0 +1,16 @@
+{
+  "name": "selftbot",
+  "version": "1.0.0",
+  "description": "Selftbot - Self-hosted bot dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "discord.js-selfbot-v13": "^3.7.1",
+    "express": "^4.22.1",
+    "socket.io": "^4.8.3"
+  }
+}

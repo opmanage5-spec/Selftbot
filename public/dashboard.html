@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Selftbot – Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="dash-body">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span>🤖</span> Selftbot
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-tab="home">🏠 Accueil</a>
+      <a href="#" class="nav-item" data-tab="voice">🎙️ Voice Auto</a>
+      <a href="#" class="nav-item" data-tab="dmall">✉️ DM All</a>
+      <a href="#" class="nav-item" data-tab="logs">📋 Logs</a>
+    </nav>
+    <div class="sidebar-user" id="sidebarUser">
+      <div class="user-avatar-wrap">
+        <img id="sideAvatar" src="" alt="avatar" />
+        <span class="status-dot online"></span>
+      </div>
+      <div>
+        <div id="sideUsername" class="user-tag">...</div>
+        <div class="user-status">En ligne</div>
+      </div>
+    </div>
+    <button class="btn-disconnect" id="disconnectBtn">🔌 Déconnecter</button>
+  </aside>
+
+  <main class="dash-main">
+
+    <!-- HOME -->
+    <section class="tab-content active" id="tab-home">
+      <div class="page-header">
+        <h2>Tableau de bord</h2>
+        <span class="badge-online">● Connecté</span>
+      </div>
+      <div class="cards-grid">
+        <div class="stat-card">
+          <div class="stat-icon">🎙️</div>
+          <div class="stat-info">
+            <div class="stat-label">Voice Auto</div>
+            <div class="stat-desc">Rejoindre un salon vocal automatiquement</div>
+          </div>
+          <button class="btn-card" onclick="switchTab('voice')">Utiliser</button>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">✉️</div>
+          <div class="stat-info">
+            <div class="stat-label">DM All</div>
+            <div class="stat-desc">Envoyer un message à tous tes amis</div>
+          </div>
+          <button class="btn-card" onclick="switchTab('dmall')">Utiliser</button>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📋</div>
+          <div class="stat-info">
+            <div class="stat-label">Logs</div>
+            <div class="stat-desc">Voir l'historique des actions</div>
+          </div>
+          <button class="btn-card" onclick="switchTab('logs')">Voir</button>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <h3>Commandes disponibles</h3>
+        <div class="cmd-list">
+          <div class="cmd-item">
+            <code>!voiceauto &lt;channelID&gt;</code>
+            <span>Rejoindre un salon vocal par son ID</span>
+          </div>
+          <div class="cmd-item">
+            <code>!dmall &lt;message&gt;</code>
+            <span>Envoyer un DM à tous tes amis Discord</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VOICE AUTO -->
+    <section class="tab-content" id="tab-voice">
+      <div class="page-header">
+        <h2>🎙️ Voice Auto</h2>
+        <span class="page-sub">Rejoindre un salon vocal automatiquement</span>
+      </div>
+
+      <div class="form-card">
+        <div class="field-group">
+          <label for="channelId">ID du salon vocal</label>
+          <input
+            type="text"
+            id="channelId"
+            placeholder="ex: 123456789012345678"
+            maxlength="20"
+          />
+          <small>Fais clic droit sur un salon vocal → Copier l'identifiant (Mode développeur requis)</small>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="voiceBtn" onclick="sendVoiceAuto()">
+            <span>🎙️</span> Rejoindre le vocal
+          </button>
+          <button class="btn-secondary" onclick="leaveVoice()">
+            <span>🚪</span> Quitter le vocal
+          </button>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <strong>💡 Comment activer le mode développeur ?</strong><br/>
+        Paramètres Discord → Apparence → Activer le mode développeur.<br/>
+        Ensuite, clic droit sur n'importe quel salon → <em>Copier l'identifiant</em>.
+      </div>
+    </section>
+
+    <!-- DM ALL -->
+    <section class="tab-content" id="tab-dmall">
+      <div class="page-header">
+        <h2>✉️ DM All</h2>
+        <span class="page-sub">Envoyer un message privé à tous tes amis</span>
+      </div>
+
+      <div class="form-card">
+        <div class="field-group">
+          <label for="dmMessage">Message à envoyer</label>
+          <textarea
+            id="dmMessage"
+            placeholder="Écris ton message ici..."
+            rows="5"
+          ></textarea>
+          <small>Le message sera envoyé à chacun de tes amis avec un délai de 1.2s pour éviter le rate-limit.</small>
+        </div>
+        <button class="btn-primary" id="dmBtn" onclick="sendDmAll()">
+          <span>✉️</span> Envoyer à tous mes amis
+        </button>
+      </div>
+
+      <div class="warn-card">
+        <strong>⚠️ Attention</strong><br/>
+        L'envoi massif de DM peut entraîner des restrictions sur ton compte Discord.
+        Utilise cette fonction avec modération.
+      </div>
+    </section>
+
+    <!-- LOGS -->
+    <section class="tab-content" id="tab-logs">
+      <div class="page-header">
+        <h2>📋 Logs</h2>
+        <span class="page-sub">Historique des actions en temps réel</span>
+        <button class="btn-ghost" onclick="clearLogs()">🗑 Effacer</button>
+      </div>
+      <div class="log-box" id="logBox">
+        <div class="log-entry info">
+          <span class="log-time">--:--:--</span>
+          <span class="log-msg">En attente d'actions...</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const userData = JSON.parse(sessionStorage.getItem('sbUser') || '{}');
+    if (!userData.username) {
+      window.location.href = '/';
+    }
+
+    document.getElementById('sideUsername').textContent = userData.username || 'Inconnu';
+    if (userData.avatar) {
+      document.getElementById('sideAvatar').src = userData.avatar;
+    }
+
+    socket.on('log', addLog);
+
+    socket.on('connect', () => {});
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchTab(item.dataset.tab);
+      });
+    });
+
+    function sendVoiceAuto() {
+      const channelId = document.getElementById('channelId').value.trim();
+      if (!channelId) return addLog({ type: 'error', msg: 'Entre un ID de salon vocal.', time: now() });
+      if (!/^\d{17,20}$/.test(channelId)) return addLog({ type: 'error', msg: 'ID invalide (doit être un nombre de 17-20 chiffres).', time: now() });
+      addLog({ type: 'info', msg: `Tentative de connexion au vocal ${channelId}...`, time: now() });
+      socket.emit('voiceauto', { channelId });
+      switchTab('logs');
+    }
+
+    function leaveVoice() {
+      addLog({ type: 'info', msg: 'Déconnexion des salons vocaux...', time: now() });
+      socket.emit('leavevoice');
+      switchTab('logs');
+    }
+
+    function sendDmAll() {
+      const message = document.getElementById('dmMessage').value.trim();
+      if (!message) return addLog({ type: 'error', msg: 'Le message est vide.', time: now() });
+      addLog({ type: 'info', msg: 'Démarrage du DM All...', time: now() });
+      socket.emit('dmall', { message });
+      switchTab('logs');
+    }
+
+    function addLog(entry) {
+      const box = document.getElementById('logBox');
+      const div = document.createElement('div');
+      div.className = 'log-entry ' + (entry.type || 'info');
+      div.innerHTML = `<span class="log-time">${entry.time || now()}</span><span class="log-msg">${escHtml(entry.msg)}</span>`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('logBox').innerHTML = '';
+    }
+
+    function now() {
+      return new Date().toLocaleTimeString('fr-FR');
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    document.getElementById('disconnectBtn').addEventListener('click', () => {
+      sessionStorage.removeItem('sbUser');
+      socket.disconnect();
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>

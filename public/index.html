@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Selftbot – Connexion</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="brand">
+        <span class="brand-icon">🤖</span>
+        <h1>Selftbot</h1>
+        <p class="brand-sub">Dashboard selfbot Discord</p>
+      </div>
+
+      <form id="loginForm" autocomplete="off">
+        <div class="field-group">
+          <label for="token">Token Discord</label>
+          <div class="token-wrap">
+            <input
+              type="password"
+              id="token"
+              placeholder="Colle ton token Discord ici..."
+              spellcheck="false"
+              autocomplete="off"
+            />
+            <button type="button" id="toggleToken" title="Afficher/Masquer">👁</button>
+          </div>
+          <small>
+            Ton token reste dans cette session et n'est jamais sauvegardé.
+            <a href="#how" id="howBtn">Comment le trouver ?</a>
+          </small>
+        </div>
+
+        <button type="submit" class="btn-primary" id="connectBtn">
+          <span class="btn-icon">⚡</span> Se connecter
+        </button>
+      </form>
+
+      <div class="how-box" id="howBox" style="display:none">
+        <h3>Comment obtenir ton token ?</h3>
+        <ol>
+          <li>Ouvre Discord dans le navigateur (discord.com)</li>
+          <li>Appuie sur <kbd>F12</kbd> → onglet <strong>Console</strong></li>
+          <li>Colle cette commande et appuie sur Entrée :<br/>
+            <code>webpackChunkdiscord_app.push([[Math.random()],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]);m.find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken()</code>
+          </li>
+          <li>Copie la valeur affichée (sans les guillemets)</li>
+        </ol>
+        <p style="color:#ff6b6b;font-size:.8rem;">⚠️ Ne partage jamais ton token avec personne d'autre !</p>
+      </div>
+
+      <div id="errorMsg" class="error-msg" style="display:none"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let connecting = false;
+
+    document.getElementById('toggleToken').addEventListener('click', () => {
+      const inp = document.getElementById('token');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+
+    document.getElementById('howBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const box = document.getElementById('howBox');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (connecting) return;
+      const token = document.getElementById('token').value.trim();
+      if (!token) return showError('Veuillez entrer ton token.');
+
+      connecting = true;
+      const btn = document.getElementById('connectBtn');
+      btn.textContent = '⏳ Connexion...';
+      btn.disabled = true;
+      hideError();
+
+      socket.emit('start', { token });
+    });
+
+    socket.on('connected', (data) => {
+      sessionStorage.setItem('sbUser', JSON.stringify(data));
+      window.location.href = '/dashboard';
+    });
+
+    socket.on('log', (entry) => {
+      if (entry.type === 'error') {
+        showError(entry.msg);
+        connecting = false;
+        const btn = document.getElementById('connectBtn');
+        btn.innerHTML = '<span class="btn-icon">⚡</span> Se connecter';
+        btn.disabled = false;
+      }
+    });
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = '❌ ' + msg;
+      el.style.display = 'block';
+    }
+    function hideError() {
+      document.getElementById('errorMsg').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
