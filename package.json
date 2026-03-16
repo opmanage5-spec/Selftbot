@@ -13,6 +13,8 @@
     "discord.js": "^14.25.1",
     "discord.js-selfbot-v13": "^3.7.1",
     "express": "^4.22.1",
+    "groq-sdk": "^1.1.1",
+    "node-fetch": "^2.7.0",
     "opusscript": "^0.0.8",
     "socket.io": "^4.8.3"
   }

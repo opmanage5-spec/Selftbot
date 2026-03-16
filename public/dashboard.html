@@ -50,10 +50,28 @@
       </div>
     </div>
     <button class="btn-disconnect" id="disconnectBtn">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 115.64 17.36"/><line x1="12" y1="12" x2="12" y2="2"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Deconnecter
     </button>
   </aside>
+
+  <!-- LOGOUT MODAL -->
+  <div class="modal-overlay" id="logoutModal">
+    <div class="modal-card">
+      <div class="modal-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ed4245" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </div>
+      <h3>Deconnecter le selfbot ?</h3>
+      <p>Le selfbot sera deconnecte de Discord et ta session sera effacee. Tu devras entrer ton token a nouveau pour te reconnecter.</p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelLogout">Annuler</button>
+        <button class="btn-danger" id="confirmLogout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Oui, deconnecter
+        </button>
+      </div>
+    </div>
+  </div>
 
   <main class="dash-main">
 
@@ -301,13 +319,30 @@
     }
 
     document.getElementById('disconnectBtn').addEventListener('click', () => {
+      document.getElementById('logoutModal').classList.add('active');
+    });
+
+    document.getElementById('cancelLogout').addEventListener('click', () => {
+      document.getElementById('logoutModal').classList.remove('active');
+    });
+
+    document.getElementById('logoutModal').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('logoutModal')) {
+        document.getElementById('logoutModal').classList.remove('active');
+      }
+    });
+
+    document.getElementById('confirmLogout').addEventListener('click', () => {
+      const btn = document.getElementById('confirmLogout');
+      btn.innerHTML = `<svg class="ic-spin" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#fff" stroke-width="2.5" stroke-dasharray="20 18"/></svg> Deconnexion...`;
+      btn.disabled = true;
       socket.emit('disconnect_bot');
       localStorage.removeItem('sbUser');
       localStorage.removeItem('sbToken');
       setTimeout(() => {
         socket.disconnect();
         window.location.href = '/';
-      }, 300);
+      }, 600);
     });
   </script>
 </body>
