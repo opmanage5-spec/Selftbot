@@ -117,26 +117,56 @@ io.on('connection', (socket) => {
       const total = friendIds.size;
       if (total === 0) return log('warn', 'Aucun ami trouve sur ce compte.');
 
-      log('info', `Envoi du message a ${total} ami(s)...`);
+      log('info', `Envoi du message a ${total} ami(s) — mode anti-detection actif...`);
       let sent = 0;
       let failed = 0;
+      let captchaHits = 0;
 
       for (const [userId] of friendIds) {
         try {
           const user = await botInstance.users.fetch(userId);
           const dmChannel = await user.createDM();
+
+          await dmChannel.sendTyping().catch(() => {});
+          await sleep(randomBetween(800, 1800));
+
           const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
           await dmChannel.send(finalMessage);
           sent++;
           log('success', `DM envoye a ${user.tag}`);
-          await sleep(1200);
+
+          const delay = randomBetween(2000, 4500);
+          await sleep(delay);
+
         } catch (e) {
-          failed++;
-          log('warn', `Echec pour ID ${userId} : ${e.message}`);
+          const msg = (e.message || '').toLowerCase();
+          if (msg.includes('captcha') || msg.includes('rate limit') || e.code === 40002 || e.httpStatus === 429) {
+            captchaHits++;
+            const pause = randomBetween(20000, 40000);
+            log('warn', `Captcha/rate-limit detecte — pause de ${Math.round(pause/1000)}s avant de continuer...`);
+            await sleep(pause);
+            try {
+              const dmChannel2 = await user.createDM();
+              await dmChannel2.sendTyping().catch(() => {});
+              await sleep(randomBetween(1000, 2000));
+              const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
+              await dmChannel2.send(finalMessage);
+              sent++;
+              log('success', `DM envoye a ${user.tag} (apres pause)`);
+              await sleep(randomBetween(3000, 6000));
+            } catch (e2) {
+              failed++;
+              log('warn', `Echec definitif pour ${user.tag} : ${e2.message}`);
+            }
+          } else {
+            failed++;
+            log('warn', `Echec pour ID ${userId} : ${e.message}`);
+            await sleep(randomBetween(1000, 2000));
+          }
         }
       }
 
-      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s).`);
+      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s), ${captchaHits} captcha(s) rencontre(s).`);
     } catch (err) {
       log('error', 'Erreur dmall : ' + (err.message || err));
     }
@@ -160,6 +190,10 @@ io.on('connection', (socket) => {
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+function randomBetween(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 server.listen(PORT, '0.0.0.0', () => {

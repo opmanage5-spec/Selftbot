@@ -175,7 +175,7 @@
           ></textarea>
           <small>
             <strong style="color:var(--accent)">{user}</strong> sera remplacé par le pseudo de chaque destinataire.
-            Délai de 1.2s entre chaque envoi pour éviter le rate-limit.
+            Mode anti-détection actif : délai aléatoire (2–4.5s), indicateur de frappe, et pause automatique en cas de captcha.
           </small>
         </div>
         <button class="btn-primary" id="dmBtn" onclick="sendDmAll()">
