@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const { createSelfbot } = require('./bot');
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
+const { startDiscordBot } = require('./discord-bot');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,9 +18,12 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const activeBots = {};
+const userTokenMap = {};
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+
+startDiscordBot(userTokenMap);
 
 io.on('connection', (socket) => {
   let botInstance = null;
@@ -37,7 +41,7 @@ io.on('connection', (socket) => {
     if (activeBots[token]) {
       botInstance = activeBots[token];
       botToken = token;
-      log('success', `Reconnecté en tant que ${botInstance.user.tag}`);
+      log('success', `Reconnecte en tant que ${botInstance.user.tag}`);
       return socket.emit('connected', {
         username: botInstance.user.tag,
         avatar: botInstance.user.displayAvatarURL({ format: 'png', size: 128 }),
@@ -50,6 +54,7 @@ io.on('connection', (socket) => {
       botInstance = await createSelfbot(token, log);
       botToken = token;
       activeBots[token] = botInstance;
+      userTokenMap[botInstance.user.id] = token;
       socket.emit('connected', {
         username: botInstance.user.tag,
         avatar: botInstance.user.displayAvatarURL({ format: 'png', size: 128 }),
@@ -61,12 +66,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('voiceauto', async ({ channelId }) => {
-    if (!botInstance) return log('error', 'Bot non connecté. Reconnecte-toi.');
+    if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
     try {
       const channel = await botInstance.channels.fetch(channelId).catch(() => null);
-      if (!channel) return log('error', 'Salon introuvable. Vérifie l\'ID.');
+      if (!channel) return log('error', 'Salon introuvable. Verifie l\'ID.');
       if (channel.type !== 'GUILD_VOICE' && channel.type !== 'GUILD_STAGE_VOICE') {
-        return log('error', 'Cet ID ne correspond pas à un salon vocal.');
+        return log('error', 'Cet ID ne correspond pas a un salon vocal.');
       }
 
       const existingConn = getVoiceConnection(channel.guild.id);
@@ -80,14 +85,14 @@ io.on('connection', (socket) => {
         selfMute: true,
       });
 
-      log('success', `✅ Connecté au vocal : #${channel.name} — ${channel.guild.name}`);
+      log('success', `Connecte au vocal : #${channel.name} — ${channel.guild.name}`);
     } catch (err) {
       log('error', 'Erreur voiceauto : ' + (err.message || err));
     }
   });
 
   socket.on('leavevoice', async () => {
-    if (!botInstance) return log('error', 'Bot non connecté.');
+    if (!botInstance) return log('error', 'Bot non connecte.');
     try {
       let count = 0;
       for (const [, guild] of botInstance.guilds.cache) {
@@ -95,7 +100,7 @@ io.on('connection', (socket) => {
         if (conn) {
           conn.destroy();
           count++;
-          log('success', `Déconnecté du vocal dans ${guild.name}`);
+          log('success', `Deconnecte du vocal dans ${guild.name}`);
         }
       }
       if (count === 0) log('warn', 'Aucune connexion vocale active.');
@@ -105,14 +110,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('dmall', async ({ message }) => {
-    if (!botInstance) return log('error', 'Bot non connecté. Reconnecte-toi.');
+    if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
     if (!message || message.trim() === '') return log('error', 'Le message est vide.');
     try {
       const friendIds = botInstance.relationships.cache.filter(type => type === 1);
       const total = friendIds.size;
-      if (total === 0) return log('warn', 'Aucun ami trouvé sur ce compte.');
+      if (total === 0) return log('warn', 'Aucun ami trouve sur ce compte.');
 
-      log('info', `Envoi du message à ${total} ami(s)...`);
+      log('info', `Envoi du message a ${total} ami(s)...`);
       let sent = 0;
       let failed = 0;
 
@@ -120,17 +125,18 @@ io.on('connection', (socket) => {
         try {
           const user = await botInstance.users.fetch(userId);
           const dmChannel = await user.createDM();
-          await dmChannel.send(message);
+          const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
+          await dmChannel.send(finalMessage);
           sent++;
-          log('success', `DM envoyé à ${user.tag}`);
+          log('success', `DM envoye a ${user.tag}`);
           await sleep(1200);
         } catch (e) {
           failed++;
-          log('warn', `Échec pour ID ${userId} : ${e.message}`);
+          log('warn', `Echec pour ID ${userId} : ${e.message}`);
         }
       }
 
-      log('info', `Terminé — ${sent} envoyé(s), ${failed} échoué(s).`);
+      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s).`);
     } catch (err) {
       log('error', 'Erreur dmall : ' + (err.message || err));
     }
@@ -138,6 +144,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect_bot', () => {
     if (botToken && activeBots[botToken]) {
+      if (botInstance && botInstance.user) {
+        delete userTokenMap[botInstance.user.id];
+      }
       activeBots[botToken].destroy();
       delete activeBots[botToken];
     }
