@@ -89,6 +89,7 @@
 
     socket.on('connected', (data) => {
       sessionStorage.setItem('sbUser', JSON.stringify(data));
+      sessionStorage.setItem('sbToken', document.getElementById('token').value.trim());
       window.location.href = '/dashboard';
     });
 

@@ -8,9 +8,11 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.18.0",
     "cookie-parser": "^1.4.7",
     "discord.js-selfbot-v13": "^3.7.1",
     "express": "^4.22.1",
+    "opusscript": "^0.0.8",
     "socket.io": "^4.8.3"
   }
 }

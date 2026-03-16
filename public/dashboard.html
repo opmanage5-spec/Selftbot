@@ -167,7 +167,9 @@
     const socket = io();
 
     const userData = JSON.parse(sessionStorage.getItem('sbUser') || '{}');
-    if (!userData.username) {
+    const storedToken = sessionStorage.getItem('sbToken') || '';
+
+    if (!userData.username || !storedToken) {
       window.location.href = '/';
     }
 
@@ -178,7 +180,15 @@
 
     socket.on('log', addLog);
 
-    socket.on('connect', () => {});
+    socket.on('connect', () => {
+      socket.emit('start', { token: storedToken });
+    });
+
+    socket.on('connected', (data) => {
+      document.getElementById('sideUsername').textContent = data.username;
+      if (data.avatar) document.getElementById('sideAvatar').src = data.avatar;
+      addLog({ type: 'success', msg: `Reconnecté en tant que ${data.username}`, time: now() });
+    });
 
     function switchTab(name) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -239,9 +249,13 @@
     }
 
     document.getElementById('disconnectBtn').addEventListener('click', () => {
+      socket.emit('disconnect_bot');
       sessionStorage.removeItem('sbUser');
-      socket.disconnect();
-      window.location.href = '/';
+      sessionStorage.removeItem('sbToken');
+      setTimeout(() => {
+        socket.disconnect();
+        window.location.href = '/';
+      }, 300);
     });
   </script>
 </body>
