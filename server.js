@@ -3,9 +3,11 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const fetch = require('node-fetch');
 const { createSelfbot } = require('./bot');
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
 const { startDiscordBot } = require('./discord-bot');
+const { solveCaptcha } = require('./captcha-solver');
 
 const app = express();
 const server = http.createServer(app);
@@ -117,56 +119,27 @@ io.on('connection', (socket) => {
       const total = friendIds.size;
       if (total === 0) return log('warn', 'Aucun ami trouve sur ce compte.');
 
-      log('info', `Envoi du message a ${total} ami(s) — mode anti-detection actif...`);
-      let sent = 0;
-      let failed = 0;
-      let captchaHits = 0;
+      log('info', `Envoi du message a ${total} ami(s)...`);
+      let sent = 0, failed = 0, captchaResolved = 0;
 
       for (const [userId] of friendIds) {
         try {
           const user = await botInstance.users.fetch(userId);
           const dmChannel = await user.createDM();
-
           await dmChannel.sendTyping().catch(() => {});
-          await sleep(randomBetween(800, 1800));
-
           const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
-          await dmChannel.send(finalMessage);
-          sent++;
-          log('success', `DM envoye a ${user.tag}`);
-
-          const delay = randomBetween(2000, 4500);
-          await sleep(delay);
-
+          const ok = await sendWithCaptcha(botInstance, dmChannel.id, finalMessage, log);
+          if (ok === 'captcha_resolved') { captchaResolved++; sent++; log('success', `DM envoye a ${user.tag} (captcha resolu)`); }
+          else if (ok) { sent++; log('success', `DM envoye a ${user.tag}`); }
+          else { failed++; log('warn', `Echec pour ${user.tag} — on continue.`); }
+          await sleep(randomBetween(1200, 2500));
         } catch (e) {
-          const msg = (e.message || '').toLowerCase();
-          if (msg.includes('captcha') || msg.includes('rate limit') || e.code === 40002 || e.httpStatus === 429) {
-            captchaHits++;
-            const pause = randomBetween(20000, 40000);
-            log('warn', `Captcha/rate-limit detecte — pause de ${Math.round(pause/1000)}s avant de continuer...`);
-            await sleep(pause);
-            try {
-              const dmChannel2 = await user.createDM();
-              await dmChannel2.sendTyping().catch(() => {});
-              await sleep(randomBetween(1000, 2000));
-              const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
-              await dmChannel2.send(finalMessage);
-              sent++;
-              log('success', `DM envoye a ${user.tag} (apres pause)`);
-              await sleep(randomBetween(3000, 6000));
-            } catch (e2) {
-              failed++;
-              log('warn', `Echec definitif pour ${user.tag} : ${e2.message}`);
-            }
-          } else {
-            failed++;
-            log('warn', `Echec pour ID ${userId} : ${e.message}`);
-            await sleep(randomBetween(1000, 2000));
-          }
+          failed++;
+          log('warn', `Echec pour ID ${userId} : ${e.message} — on continue.`);
         }
       }
 
-      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s), ${captchaHits} captcha(s) rencontre(s).`);
+      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s), ${captchaResolved} captcha(s) resolu(s).`);
     } catch (err) {
       log('error', 'Erreur dmall : ' + (err.message || err));
     }
@@ -188,59 +161,28 @@ io.on('connection', (socket) => {
       const total = members.size;
       if (total === 0) return log('warn', 'Aucun membre trouve dans ce serveur.');
 
-      log('info', `Envoi du message a ${total} membre(s) de "${guild.name}" — mode anti-detection actif...`);
-      let sent = 0;
-      let failed = 0;
-      let captchaHits = 0;
+      log('info', `Envoi du message a ${total} membre(s) de "${guild.name}"...`);
+      let sent = 0, failed = 0, captchaResolved = 0;
 
       for (const [, member] of members) {
         const user = member.user;
         try {
           const dmChannel = await user.createDM();
-
           await dmChannel.sendTyping().catch(() => {});
-          await sleep(randomBetween(800, 1800));
-
           const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
-          await dmChannel.send(finalMessage);
-          sent++;
-          log('success', `DM envoye a ${user.tag}`);
-
-          await sleep(randomBetween(2000, 4500));
-
+          const ok = await sendWithCaptcha(botInstance, dmChannel.id, finalMessage, log);
+          if (ok === 'captcha_resolved') { captchaResolved++; sent++; log('success', `DM envoye a ${user.tag} (captcha resolu)`); }
+          else if (ok) { sent++; log('success', `DM envoye a ${user.tag}`); }
+          else if (ok === 'dm_disabled') { failed++; log('warn', `${user.tag} a les DMs desactives — on continue.`); }
+          else { failed++; log('warn', `Echec pour ${user.tag} — on continue.`); }
+          await sleep(randomBetween(1200, 2500));
         } catch (e) {
-          const msg = (e.message || '').toLowerCase();
-          if (msg.includes('captcha') || msg.includes('rate limit') || e.code === 40002 || e.httpStatus === 429) {
-            captchaHits++;
-            const pause = randomBetween(20000, 40000);
-            log('warn', `Captcha/rate-limit detecte — pause de ${Math.round(pause/1000)}s avant de continuer...`);
-            await sleep(pause);
-            try {
-              const dmChannel2 = await user.createDM();
-              await dmChannel2.sendTyping().catch(() => {});
-              await sleep(randomBetween(1000, 2000));
-              const finalMessage = message.replace(/\{user\}/gi, `@${user.username}`);
-              await dmChannel2.send(finalMessage);
-              sent++;
-              log('success', `DM envoye a ${user.tag} (apres pause)`);
-              await sleep(randomBetween(3000, 6000));
-            } catch (e2) {
-              failed++;
-              log('warn', `Echec definitif pour ${user.tag} : ${e2.message}`);
-            }
-          } else if (e.code === 50007) {
-            failed++;
-            log('warn', `${user.tag} a les DMs desactives.`);
-            await sleep(randomBetween(500, 1000));
-          } else {
-            failed++;
-            log('warn', `Echec pour ${user.tag} : ${e.message}`);
-            await sleep(randomBetween(1000, 2000));
-          }
+          failed++;
+          log('warn', `Echec pour ${user.tag} : ${e.message} — on continue.`);
         }
       }
 
-      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s), ${captchaHits} captcha(s) rencontre(s).`);
+      log('info', `Termine — ${sent} envoye(s), ${failed} echoue(s), ${captchaResolved} captcha(s) resolu(s).`);
     } catch (err) {
       log('error', 'Erreur dmserver : ' + (err.message || err));
     }
@@ -261,6 +203,59 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
   });
 });
+
+async function sendWithCaptcha(client, channelId, content, log) {
+  const DISCORD_API = 'https://discord.com/api/v9';
+  const token = client.token;
+
+  const headers = {
+    'Authorization': token,
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'X-Super-Properties': Buffer.from(JSON.stringify({
+      os: 'Windows', browser: 'Chrome', device: '',
+      browser_version: '120.0.0.0', os_version: '10'
+    })).toString('base64'),
+  };
+
+  try {
+    const res = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content })
+    });
+
+    if (res.ok) return true;
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 403 && data.code === 50007) return 'dm_disabled';
+
+    if (data.captcha_sitekey) {
+      if (log) log('info', `[Captcha] Captcha detecte — resolution via Groq IA...`);
+      const captchaToken = await solveCaptcha(data.captcha_sitekey, data.captcha_rqdata || null, 'discord.com', log);
+
+      if (!captchaToken) {
+        if (log) log('warn', '[Captcha] Echec resolution — on continue quand meme.');
+        return false;
+      }
+
+      const retryRes = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: { ...headers, 'X-Captcha-Key': captchaToken },
+        body: JSON.stringify({ content })
+      });
+
+      if (retryRes.ok) return 'captcha_resolved';
+      if (log) log('warn', `[Captcha] Echec apres resolution (status ${retryRes.status}) — on continue.`);
+      return false;
+    }
+
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
