@@ -125,16 +125,29 @@
       window.location.href = '/dashboard';
     });
 
+    socket.on('login_failed', ({ message }) => {
+      loginFailed(message || 'Token invalide ou refusé.');
+    });
+
     socket.on('log', (entry) => {
-      if (entry.type === 'error') {
-        showError(entry.msg);
-        connecting = false;
-        const btn = document.getElementById('connectBtn');
-        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Se connecter`;
-        btn.disabled = false;
-        document.getElementById('autoConnectMsg').style.display = 'none';
+      if (entry.type === 'error' && connecting) {
+        loginFailed(entry.msg);
       }
     });
+
+    function loginFailed(msg) {
+      connecting = false;
+      localStorage.removeItem('sbToken');
+      localStorage.removeItem('sbUser');
+      document.getElementById('autoConnectMsg').style.display = 'none';
+      document.getElementById('loginForm').style.display = 'block';
+      const btn = document.getElementById('connectBtn');
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Se reconnecter`;
+      btn.disabled = false;
+      document.getElementById('token').value = '';
+      document.getElementById('token').focus();
+      showError(msg);
+    }
 
     function showError(msg) {
       const el = document.getElementById('errorMsg');
