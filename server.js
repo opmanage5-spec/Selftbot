@@ -236,6 +236,64 @@ io.on('connection', (socket) => {
   let iaListener = null;
   let iaChannelId = null;
   let iaCmdListener = null;
+  let iaQueue = [];
+  let iaProcessing = false;
+  let iaActive = false;
+  const iaUserCooldown = new Map();
+  const IA_USER_COOLDOWN_MS = 5000;
+
+  async function processIaQueue() {
+    if (iaProcessing || iaQueue.length === 0) return;
+    iaProcessing = true;
+
+    while (iaQueue.length > 0 && iaActive) {
+      const message = iaQueue.shift();
+      const now = Date.now();
+      const lastReply = iaUserCooldown.get(message.author.id) || 0;
+      const timeSince = now - lastReply;
+      if (timeSince < IA_USER_COOLDOWN_MS) {
+        await sleep(IA_USER_COOLDOWN_MS - timeSince);
+      }
+
+      try {
+        const cleanContent = message.content.replace(/<@!?[0-9]+>/g, '').trim();
+        log('info', `[IA] "${message.author.tag}" : ${cleanContent.substring(0, 60)}`);
+        const reply = await generateIaReply(cleanContent || message.content);
+        if (!reply) { log('warn', '[IA] Reponse vide — ignoree.'); continue; }
+
+        await message.channel.sendTyping().catch(() => {});
+        await sleep(1200 + Math.random() * 1800);
+
+        let sent = false;
+        let retries = 0;
+        while (!sent && retries < 5) {
+          try {
+            await message.reply(reply).catch(() => message.channel.send(reply));
+            iaUserCooldown.set(message.author.id, Date.now());
+            log('success', `[IA] Repondu : ${reply}`);
+            sent = true;
+          } catch (err) {
+            if (err.httpStatus === 429 || (err.message && err.message.includes('rate limit'))) {
+              const retryAfter = (err.retryAfter || 5000);
+              log('warn', `[IA] Rate limit Discord — attente ${retryAfter}ms avant de reessayer...`);
+              await sleep(retryAfter + 500);
+              retries++;
+            } else {
+              log('warn', `[IA] Erreur envoi : ${err.message}`);
+              sent = true;
+            }
+          }
+        }
+        if (!sent) log('warn', '[IA] Message abandonne apres 5 tentatives (rate limit persistant).');
+      } catch (err) {
+        log('warn', `[IA] Erreur generation : ${err.message}`);
+      }
+
+      await sleep(1500 + Math.random() * 1000);
+    }
+
+    iaProcessing = false;
+  }
 
   function startIa(channelId) {
     if (iaListener) {
@@ -243,27 +301,20 @@ io.on('connection', (socket) => {
       iaListener = null;
     }
     iaChannelId = channelId;
+    iaActive = true;
+    iaQueue = [];
+    iaProcessing = false;
+    iaUserCooldown.clear();
 
-    iaListener = async (message) => {
+    iaListener = (message) => {
       if (message.channel.id !== iaChannelId) return;
       if (message.author.id === botInstance.user.id) return;
       if (message.author.bot) return;
       if (!message.content || message.content.trim() === '') return;
       if (message.content.startsWith('!ia')) return;
 
-      try {
-        const cleanContent = message.content.replace(/<@!?[0-9]+>/g, '').trim();
-        log('info', `[IA] "${message.author.tag}" : ${cleanContent.substring(0, 60)}`);
-        const reply = await generateIaReply(cleanContent || message.content);
-        if (!reply) return log('warn', '[IA] Reponse vide — ignoree.');
-
-        await message.channel.sendTyping().catch(() => {});
-        await sleep(800 + Math.random() * 1200);
-        await message.reply(reply).catch(() => message.channel.send(reply));
-        log('success', `[IA] Repondu : ${reply}`);
-      } catch (err) {
-        log('warn', `[IA] Erreur : ${err.message}`);
-      }
+      iaQueue.push(message);
+      processIaQueue();
     };
 
     botInstance.on('messageCreate', iaListener);
@@ -272,9 +323,12 @@ io.on('connection', (socket) => {
   }
 
   function stopIa() {
+    iaActive = false;
+    iaQueue = [];
     if (iaListener && botInstance) botInstance.off('messageCreate', iaListener);
     iaListener = null;
     iaChannelId = null;
+    iaUserCooldown.clear();
     log('info', '[IA] Auto-reply desactive.');
     socket.emit('ia_status', { active: false });
   }
