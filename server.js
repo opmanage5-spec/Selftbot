@@ -405,6 +405,23 @@ async function sendWithCaptcha(client, channelId, content, log) {
 
     const data = await res.json().catch(() => ({}));
 
+    if (res.status === 429) {
+      const retryAfter = (data.retry_after ? Math.ceil(data.retry_after * 1000) : 5000) + 500;
+      if (log) log('warn', `[Rate Limit] Discord bloque l'envoi — attente ${retryAfter}ms...`);
+      await sleep(retryAfter);
+      const retryRes = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ content })
+      });
+      if (retryRes.ok) return true;
+      const retryData = await retryRes.json().catch(() => ({}));
+      if (retryData.retry_after) {
+        if (log) log('warn', `[Rate Limit] Toujours bloque apres attente — message abandonne.`);
+        return false;
+      }
+    }
+
     if (res.status === 403 && data.code === 50007) return 'dm_disabled';
 
     if (data.captcha_sitekey) {
