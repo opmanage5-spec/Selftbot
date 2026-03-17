@@ -251,14 +251,24 @@ io.on('connection', (socket) => {
       if (message.author.bot) return;
       if (!message.content || message.content.trim() === '') return;
 
+      const isMentioned = message.mentions.users.has(botInstance.user.id);
+      const isReplyToMe = message.reference?.messageId
+        ? await message.channel.messages.fetch(message.reference.messageId)
+            .then(ref => ref.author.id === botInstance.user.id)
+            .catch(() => false)
+        : false;
+
+      if (!isMentioned && !isReplyToMe) return;
+
       try {
-        log('info', `[IA] "${message.author.tag}" : ${message.content.substring(0, 60)}`);
-        const reply = await generateIaReply(message.content);
+        const cleanContent = message.content.replace(/<@!?[0-9]+>/g, '').trim();
+        log('info', `[IA] "${message.author.tag}" : ${cleanContent.substring(0, 60)}`);
+        const reply = await generateIaReply(cleanContent || message.content);
         if (!reply) return log('warn', '[IA] Reponse vide — ignoree.');
 
         await message.channel.sendTyping().catch(() => {});
         await sleep(800 + Math.random() * 1200);
-        await message.channel.send(reply);
+        await message.reply(reply).catch(() => message.channel.send(reply));
         log('success', `[IA] Repondu : ${reply}`);
       } catch (err) {
         log('warn', `[IA] Erreur : ${err.message}`);
