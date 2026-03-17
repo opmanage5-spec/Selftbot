@@ -38,6 +38,10 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         DM Serveur
       </a>
+      <a href="#" class="nav-item" data-tab="ia">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        IA Auto
+      </a>
       <a href="#" class="nav-item" data-tab="logs">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         Logs
@@ -313,6 +317,46 @@
       </div>
     </section>
 
+    <!-- IA AUTO -->
+    <section class="tab-content" id="tab-ia">
+      <div class="page-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        <h2>IA Auto</h2>
+        <span class="page-sub">L'IA répond automatiquement à ta place dans un salon</span>
+      </div>
+
+      <div class="form-card">
+        <div class="field-group">
+          <label for="iaChannelId">ID du salon</label>
+          <input type="text" id="iaChannelId" placeholder="ex: 123456789012345678" maxlength="20" />
+          <small>L'IA répondra à <strong>tous</strong> les messages reçus dans ce salon (sauf les bots). Clic droit sur le salon → Copier l'identifiant.</small>
+        </div>
+
+        <div class="ia-status-bar" id="iaStatusBar">
+          <span class="ia-dot" id="iaDot"></span>
+          <span id="iaStatusText">Inactif</span>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-primary" id="iaStartBtn" onclick="iaStart()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Activer l'IA
+          </button>
+          <button class="btn-secondary" id="iaStopBtn" onclick="iaStop()" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12"/></svg>
+            Désactiver
+          </button>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a0a8d0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <strong>Style de l'IA</strong><br/>
+        L'IA répond comme un jeune de la cité : <em>wesh, tgl, ftg, frr, mdrr, wallah, osef…</em><br/>
+        Réponses courtes, argot, abréviations — comme si c'était toi qui écrivais.
+      </div>
+    </section>
+
     <!-- LOGS -->
     <section class="tab-content" id="tab-logs">
       <div class="page-header">
@@ -444,6 +488,37 @@
     function leaveVoice() {
       addLog({ type: 'info', msg: 'Deconnexion des salons vocaux...', time: now() });
       socket.emit('leavevoice');
+      switchTab('logs');
+    }
+
+    socket.on('ia_status', ({ active, channelId }) => {
+      const dot = document.getElementById('iaDot');
+      const txt = document.getElementById('iaStatusText');
+      const startBtn = document.getElementById('iaStartBtn');
+      const stopBtn = document.getElementById('iaStopBtn');
+      if (active) {
+        dot.className = 'ia-dot active';
+        txt.textContent = `Actif — salon ${channelId}`;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      } else {
+        dot.className = 'ia-dot';
+        txt.textContent = 'Inactif';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    });
+
+    function iaStart() {
+      const channelId = document.getElementById('iaChannelId').value.trim();
+      if (!channelId) return addLog({ type: 'error', msg: '[IA] Entre un ID de salon.', time: now() });
+      if (!/^\d{17,20}$/.test(channelId)) return addLog({ type: 'error', msg: '[IA] ID invalide (17-20 chiffres).', time: now() });
+      socket.emit('ia_start', { channelId });
+      switchTab('logs');
+    }
+
+    function iaStop() {
+      socket.emit('ia_stop');
       switchTab('logs');
     }
 

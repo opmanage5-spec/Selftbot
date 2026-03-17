@@ -8,6 +8,28 @@ const { createSelfbot } = require('./bot');
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
 const { startDiscordBot } = require('./discord-bot');
 const { solveCaptcha } = require('./captcha-solver');
+const Groq = require('groq-sdk');
+
+const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+const IA_SYSTEM_PROMPT = `Tu es un jeune de la cité français. Tu parles en argot, verlan, abréviations SMS. 
+Tu utilises des expressions comme : wesh, osef, tgl, ftg, frr, mdrr, jsp, c'est ouf, aight, t'as raison frr, wallah, on s'en fou, cimer, tkt, lml, no cap, bg, sah.
+Tu insultes parfois légèrement et naturellement. Tu réponds TOUJOURS très court (1 ou 2 phrases max). 
+Jamais de majuscules. Jamais de ponctuation formelle. Tu adaptes ta réponse au contenu du message reçu.
+Tu ne te présentes jamais. Tu réponds direct comme dans une conv Discord.`;
+
+async function generateIaReply(userMessage) {
+  const res = await groqClient.chat.completions.create({
+    model: 'llama3-8b-8192',
+    messages: [
+      { role: 'system', content: IA_SYSTEM_PROMPT },
+      { role: 'user', content: userMessage }
+    ],
+    max_tokens: 120,
+    temperature: 0.95
+  });
+  return res.choices[0]?.message?.content?.trim() || null;
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -207,6 +229,55 @@ io.on('connection', (socket) => {
     } catch (err) {
       log('error', 'Erreur dmserver : ' + (err.message || err));
     }
+  });
+
+  let iaListener = null;
+  let iaChannelId = null;
+
+  socket.on('ia_start', ({ channelId }) => {
+    if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
+    if (!channelId || !/^\d{17,20}$/.test(channelId.trim())) return log('error', '[IA] ID de salon invalide.');
+
+    if (iaListener) {
+      botInstance.off('messageCreate', iaListener);
+      iaListener = null;
+    }
+
+    iaChannelId = channelId.trim();
+
+    iaListener = async (message) => {
+      if (message.channel.id !== iaChannelId) return;
+      if (message.author.id === botInstance.user.id) return;
+      if (message.author.bot) return;
+      if (!message.content || message.content.trim() === '') return;
+
+      try {
+        log('info', `[IA] "${message.author.tag}" : ${message.content.substring(0, 60)}`);
+        const reply = await generateIaReply(message.content);
+        if (!reply) return log('warn', '[IA] Reponse vide — ignoree.');
+
+        await message.channel.sendTyping().catch(() => {});
+        await sleep(800 + Math.random() * 1200);
+        await message.channel.send(reply);
+        log('success', `[IA] Repondu : ${reply}`);
+      } catch (err) {
+        log('warn', `[IA] Erreur : ${err.message}`);
+      }
+    };
+
+    botInstance.on('messageCreate', iaListener);
+    log('success', `[IA] Auto-reply active sur le salon ${iaChannelId}`);
+    socket.emit('ia_status', { active: true, channelId: iaChannelId });
+  });
+
+  socket.on('ia_stop', () => {
+    if (iaListener && botInstance) {
+      botInstance.off('messageCreate', iaListener);
+    }
+    iaListener = null;
+    iaChannelId = null;
+    log('info', '[IA] Auto-reply desactive.');
+    socket.emit('ia_status', { active: false });
   });
 
   socket.on('disconnect_bot', () => {

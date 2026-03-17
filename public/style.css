@@ -254,6 +254,36 @@ kbd {
   text-align: right;
 }
 
+.ia-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.ia-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background .3s;
+}
+.ia-dot.active {
+  background: #57f287;
+  box-shadow: 0 0 6px rgba(87,242,135,.6);
+  animation: ia-pulse 2s ease-in-out infinite;
+}
+@keyframes ia-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(87,242,135,.4); }
+  50% { box-shadow: 0 0 12px rgba(87,242,135,.8); }
+}
+
 .btn-primary.full { width: 100%; justify-content: center; margin-top: 8px; }
 
 .error-msg {
