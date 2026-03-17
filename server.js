@@ -18,12 +18,12 @@ tu réponds TOUJOURS au contenu du message — si on pose une question tu répon
 tu insultes (tgl, ftg, ta gu, fdp) quand c'est marrant ou mérité, pas tout le temps.
 max 1-2 phrases. jamais de phrases longues. jamais de langage soutenu. t'es pas un bot t'es un vrai gars.`;
 
-async function generateIaReply(userMessage) {
+async function generateIaReply(history) {
   const res = await groqClient.chat.completions.create({
     model: 'llama-3.1-8b-instant',
     messages: [
       { role: 'system', content: IA_SYSTEM_PROMPT },
-      { role: 'user', content: userMessage }
+      ...history
     ],
     max_tokens: 120,
     temperature: 0.95
@@ -258,7 +258,24 @@ io.on('connection', (socket) => {
       try {
         const cleanContent = message.content.replace(/<@!?[0-9]+>/g, '').trim();
         log('info', `[IA] "${message.author.tag}" : ${cleanContent.substring(0, 60)}`);
-        const reply = await generateIaReply(cleanContent || message.content);
+
+        let history = [];
+        try {
+          const fetched = await message.channel.messages.fetch({ limit: 12, before: message.id });
+          const sorted = [...fetched.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+          for (const m of sorted) {
+            if (!m.content || m.content.trim() === '') continue;
+            const text = m.content.replace(/<@!?[0-9]+>/g, '').trim();
+            if (m.author.id === botInstance.user.id) {
+              history.push({ role: 'assistant', content: text });
+            } else {
+              history.push({ role: 'user', content: `${m.author.username}: ${text}` });
+            }
+          }
+        } catch (_) {}
+        history.push({ role: 'user', content: `${message.author.username}: ${cleanContent || message.content}` });
+
+        const reply = await generateIaReply(history);
         if (!reply) { log('warn', '[IA] Reponse vide — ignoree.'); continue; }
 
         await message.channel.sendTyping().catch(() => {});
