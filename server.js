@@ -97,6 +97,8 @@ io.on('connection', (socket) => {
         }
       });
 
+      attachIaCommands();
+
       socket.emit('connected', {
         username: botInstance.user.tag,
         avatar: botInstance.user.displayAvatarURL({ format: 'png', size: 128 }),
@@ -233,32 +235,21 @@ io.on('connection', (socket) => {
 
   let iaListener = null;
   let iaChannelId = null;
+  let iaCmdListener = null;
 
-  socket.on('ia_start', ({ channelId }) => {
-    if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
-    if (!channelId || !/^\d{17,20}$/.test(channelId.trim())) return log('error', '[IA] ID de salon invalide.');
-
+  function startIa(channelId) {
     if (iaListener) {
       botInstance.off('messageCreate', iaListener);
       iaListener = null;
     }
-
-    iaChannelId = channelId.trim();
+    iaChannelId = channelId;
 
     iaListener = async (message) => {
       if (message.channel.id !== iaChannelId) return;
       if (message.author.id === botInstance.user.id) return;
       if (message.author.bot) return;
       if (!message.content || message.content.trim() === '') return;
-
-      const isMentioned = message.mentions.users.has(botInstance.user.id);
-      const isReplyToMe = message.reference?.messageId
-        ? await message.channel.messages.fetch(message.reference.messageId)
-            .then(ref => ref.author.id === botInstance.user.id)
-            .catch(() => false)
-        : false;
-
-      if (!isMentioned && !isReplyToMe) return;
+      if (message.content.startsWith('!ia')) return;
 
       try {
         const cleanContent = message.content.replace(/<@!?[0-9]+>/g, '').trim();
@@ -278,17 +269,46 @@ io.on('connection', (socket) => {
     botInstance.on('messageCreate', iaListener);
     log('success', `[IA] Auto-reply active sur le salon ${iaChannelId}`);
     socket.emit('ia_status', { active: true, channelId: iaChannelId });
-  });
+  }
 
-  socket.on('ia_stop', () => {
-    if (iaListener && botInstance) {
-      botInstance.off('messageCreate', iaListener);
-    }
+  function stopIa() {
+    if (iaListener && botInstance) botInstance.off('messageCreate', iaListener);
     iaListener = null;
     iaChannelId = null;
     log('info', '[IA] Auto-reply desactive.');
     socket.emit('ia_status', { active: false });
+  }
+
+  function attachIaCommands() {
+    if (iaCmdListener) botInstance.off('messageCreate', iaCmdListener);
+
+    iaCmdListener = async (message) => {
+      if (message.author.id !== botInstance.user.id) return;
+      const content = message.content.trim().toLowerCase();
+      if (!content.startsWith('!ia')) return;
+
+      const parts = content.split(/\s+/);
+      const sub = parts[1];
+
+      if (sub === 'on') {
+        await message.delete().catch(() => {});
+        startIa(message.channel.id);
+      } else if (sub === 'off') {
+        await message.delete().catch(() => {});
+        stopIa();
+      }
+    };
+
+    botInstance.on('messageCreate', iaCmdListener);
+  }
+
+  socket.on('ia_start', ({ channelId }) => {
+    if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
+    if (!channelId || !/^\d{17,20}$/.test(channelId.trim())) return log('error', '[IA] ID de salon invalide.');
+    startIa(channelId.trim());
   });
+
+  socket.on('ia_stop', () => stopIa());
 
   socket.on('disconnect_bot', () => {
     if (botToken && activeBots[botToken]) {
