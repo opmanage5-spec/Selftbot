@@ -57,6 +57,24 @@ io.on('connection', (socket) => {
       botToken = token;
       activeBots[token] = botInstance;
       userTokenMap[botInstance.user.id] = token;
+
+      botInstance.on('invalidated', () => {
+        log('error', 'Token invalide ou expire — reconnexion requise.');
+        if (activeBots[botToken]) {
+          delete userTokenMap[botInstance.user?.id];
+          delete activeBots[botToken];
+        }
+        botInstance = null;
+        botToken = null;
+        socket.emit('session_expired');
+      });
+
+      botInstance.on('error', (err) => {
+        if (err.message?.toLowerCase().includes('token')) {
+          socket.emit('session_expired');
+        }
+      });
+
       socket.emit('connected', {
         username: botInstance.user.tag,
         avatar: botInstance.user.displayAvatarURL({ format: 'png', size: 128 }),
@@ -64,6 +82,7 @@ io.on('connection', (socket) => {
       });
     } catch (err) {
       log('error', 'Erreur de connexion : ' + (err.message || err));
+      socket.emit('login_failed', { message: err.message || 'Token invalide ou refuse.' });
     }
   });
 
@@ -111,15 +130,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('dmall', async ({ message }) => {
+  socket.on('dmall', async ({ message, cooldown }) => {
     if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
     if (!message || message.trim() === '') return log('error', 'Le message est vide.');
+    const delay = Math.max(500, Math.min(30000, parseInt(cooldown) || 2000));
     try {
       const friendIds = botInstance.relationships.cache.filter(type => type === 1);
       const total = friendIds.size;
       if (total === 0) return log('warn', 'Aucun ami trouve sur ce compte.');
 
-      log('info', `Envoi du message a ${total} ami(s)...`);
+      log('info', `Envoi du message a ${total} ami(s) — cooldown : ${delay / 1000}s`);
       let sent = 0, failed = 0, captchaResolved = 0;
 
       for (const [userId] of friendIds) {
@@ -132,7 +152,7 @@ io.on('connection', (socket) => {
           if (ok === 'captcha_resolved') { captchaResolved++; sent++; log('success', `DM envoye a ${user.tag} (captcha resolu)`); }
           else if (ok) { sent++; log('success', `DM envoye a ${user.tag}`); }
           else { failed++; log('warn', `Echec pour ${user.tag} — on continue.`); }
-          await sleep(randomBetween(1200, 2500));
+          await sleep(delay);
         } catch (e) {
           failed++;
           log('warn', `Echec pour ID ${userId} : ${e.message} — on continue.`);
@@ -145,10 +165,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('dmserver', async ({ guildId, message }) => {
+  socket.on('dmserver', async ({ guildId, message, cooldown }) => {
     if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
     if (!guildId || guildId.trim() === '') return log('error', 'ID de serveur manquant.');
     if (!message || message.trim() === '') return log('error', 'Le message est vide.');
+    const delay = Math.max(500, Math.min(30000, parseInt(cooldown) || 2000));
 
     try {
       const guild = await botInstance.guilds.fetch(guildId).catch(() => null);
@@ -161,7 +182,7 @@ io.on('connection', (socket) => {
       const total = members.size;
       if (total === 0) return log('warn', 'Aucun membre trouve dans ce serveur.');
 
-      log('info', `Envoi du message a ${total} membre(s) de "${guild.name}"...`);
+      log('info', `Envoi du message a ${total} membre(s) de "${guild.name}" — cooldown : ${delay / 1000}s`);
       let sent = 0, failed = 0, captchaResolved = 0;
 
       for (const [, member] of members) {
@@ -175,7 +196,7 @@ io.on('connection', (socket) => {
           else if (ok) { sent++; log('success', `DM envoye a ${user.tag}`); }
           else if (ok === 'dm_disabled') { failed++; log('warn', `${user.tag} a les DMs desactives — on continue.`); }
           else { failed++; log('warn', `Echec pour ${user.tag} — on continue.`); }
-          await sleep(randomBetween(1200, 2500));
+          await sleep(delay);
         } catch (e) {
           failed++;
           log('warn', `Echec pour ${user.tag} : ${e.message} — on continue.`);

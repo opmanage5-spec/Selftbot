@@ -59,6 +59,34 @@
     </button>
   </aside>
 
+  <!-- RELOGIN MODAL -->
+  <div class="modal-overlay" id="reloginModal">
+    <div class="modal-card">
+      <div class="modal-icon" style="margin-bottom:12px;background:rgba(250,166,26,.1);border-radius:50%;width:fit-content;margin-left:auto;margin-right:auto">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#faa61a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <h3>Session expirée</h3>
+      <p>Ton token a été invalidé ou a expiré. Entre ton nouveau token pour te reconnecter sans quitter le dashboard.</p>
+      <div class="field-group" style="text-align:left;margin-bottom:14px">
+        <label for="reloginToken">Nouveau Token Discord</label>
+        <div class="token-wrap">
+          <input type="password" id="reloginToken" placeholder="Colle ton token ici..." spellcheck="false" autocomplete="off"/>
+          <button type="button" id="toggleReloginToken" title="Afficher/Masquer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div id="reloginError" class="error-msg" style="display:none;margin-top:8px"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="reloginQuit">Quitter le site</button>
+        <button class="btn-primary" id="reloginBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Se reconnecter
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- LOGOUT MODAL -->
   <div class="modal-overlay" id="logoutModal">
     <div class="modal-card">
@@ -210,6 +238,14 @@
             Mode anti-détection actif : délai aléatoire (2–4.5s), indicateur de frappe, et pause automatique en cas de captcha.
           </small>
         </div>
+        <div class="field-group">
+          <label for="dmAllCooldown">Cooldown entre chaque message</label>
+          <div class="cooldown-row">
+            <input type="range" id="dmAllCooldown" min="1" max="15" value="2" step="0.5" oninput="document.getElementById('dmAllCooldownVal').textContent = this.value + 's'" />
+            <span class="cooldown-val" id="dmAllCooldownVal">2s</span>
+          </div>
+          <small>Délai entre chaque DM. Plus c'est élevé, moins tu risques un rate-limit.</small>
+        </div>
         <button class="btn-primary" id="dmBtn" onclick="sendDmAll()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           Envoyer à tous mes amis
@@ -254,6 +290,14 @@
             <strong style="color:var(--accent)">{user}</strong> sera remplacé par le pseudo de chaque membre.
             Mode anti-détection actif : délai aléatoire, indicateur de frappe, résolution automatique des captchas.
           </small>
+        </div>
+        <div class="field-group">
+          <label for="dmServerCooldown">Cooldown entre chaque message</label>
+          <div class="cooldown-row">
+            <input type="range" id="dmServerCooldown" min="1" max="15" value="2" step="0.5" oninput="document.getElementById('dmServerCooldownVal').textContent = this.value + 's'" />
+            <span class="cooldown-val" id="dmServerCooldownVal">2s</span>
+          </div>
+          <small>Délai entre chaque DM. Plus c'est élevé, moins tu risques un rate-limit.</small>
         </div>
         <button class="btn-primary" id="dmServerBtn" onclick="sendDmServer()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -314,9 +358,64 @@
 
     socket.on('connected', (data) => {
       localStorage.setItem('sbUser', JSON.stringify(data));
+      localStorage.setItem('sbToken', data.token || localStorage.getItem('sbToken'));
       document.getElementById('sideUsername').textContent = data.username;
       if (data.avatar) document.getElementById('sideAvatar').src = data.avatar;
-      addLog({ type: 'success', msg: `Reconnecte en tant que ${data.username}`, time: now() });
+      document.getElementById('reloginModal').classList.remove('active');
+      addLog({ type: 'success', msg: `Connecte en tant que ${data.username}`, time: now() });
+    });
+
+    socket.on('session_expired', () => {
+      addLog({ type: 'error', msg: 'Session expiree — token invalide. Reconnexion requise.', time: now() });
+      localStorage.removeItem('sbToken');
+      localStorage.removeItem('sbUser');
+      showReloginModal('Session expirée — ton token a été invalidé.');
+    });
+
+    socket.on('login_failed', ({ message }) => {
+      const reloginModal = document.getElementById('reloginModal');
+      if (reloginModal.classList.contains('active')) {
+        showReloginError(message || 'Token invalide.');
+        const btn = document.getElementById('reloginBtn');
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Se reconnecter`;
+        btn.disabled = false;
+      }
+    });
+
+    function showReloginModal(msg) {
+      document.getElementById('reloginError').style.display = 'none';
+      document.getElementById('reloginToken').value = '';
+      if (msg) showReloginError(msg);
+      document.getElementById('reloginModal').classList.add('active');
+    }
+
+    function showReloginError(msg) {
+      const el = document.getElementById('reloginError');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    document.getElementById('toggleReloginToken').addEventListener('click', () => {
+      const inp = document.getElementById('reloginToken');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+
+    document.getElementById('reloginBtn').addEventListener('click', () => {
+      const token = document.getElementById('reloginToken').value.trim();
+      if (!token) return showReloginError('Entre ton token.');
+      const btn = document.getElementById('reloginBtn');
+      btn.innerHTML = `<svg class="ic-spin" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#fff" stroke-width="2.5" stroke-dasharray="20 18"/></svg> Connexion...`;
+      btn.disabled = true;
+      document.getElementById('reloginError').style.display = 'none';
+      localStorage.setItem('sbToken', token);
+      socket.emit('start', { token });
+    });
+
+    document.getElementById('reloginQuit').addEventListener('click', () => {
+      socket.emit('disconnect_bot');
+      localStorage.removeItem('sbUser');
+      localStorage.removeItem('sbToken');
+      setTimeout(() => { socket.disconnect(); window.location.href = '/'; }, 300);
     });
 
     function switchTab(name) {
@@ -351,8 +450,9 @@
     function sendDmAll() {
       const message = document.getElementById('dmMessage').value.trim();
       if (!message) return addLog({ type: 'error', msg: 'Le message est vide.', time: now() });
-      addLog({ type: 'info', msg: 'Demarrage du DM All...', time: now() });
-      socket.emit('dmall', { message });
+      const cooldown = Math.round(parseFloat(document.getElementById('dmAllCooldown').value) * 1000);
+      addLog({ type: 'info', msg: `Demarrage du DM All — cooldown : ${cooldown / 1000}s`, time: now() });
+      socket.emit('dmall', { message, cooldown });
       switchTab('logs');
     }
 
@@ -362,8 +462,9 @@
       if (!guildId) return addLog({ type: 'error', msg: 'Entre un ID de serveur.', time: now() });
       if (!/^\d{17,20}$/.test(guildId)) return addLog({ type: 'error', msg: 'ID invalide (doit etre un nombre de 17-20 chiffres).', time: now() });
       if (!message) return addLog({ type: 'error', msg: 'Le message est vide.', time: now() });
-      addLog({ type: 'info', msg: `Demarrage du DM Serveur (${guildId})...`, time: now() });
-      socket.emit('dmserver', { guildId, message });
+      const cooldown = Math.round(parseFloat(document.getElementById('dmServerCooldown').value) * 1000);
+      addLog({ type: 'info', msg: `Demarrage du DM Serveur (${guildId}) — cooldown : ${cooldown / 1000}s`, time: now() });
+      socket.emit('dmserver', { guildId, message, cooldown });
       switchTab('logs');
     }
 
