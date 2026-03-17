@@ -294,8 +294,8 @@
         <div class="field-group">
           <label for="dmServerCooldown">Cooldown entre chaque message</label>
           <div class="cooldown-row">
-            <input type="range" id="dmServerCooldown" min="1" max="15" value="2" step="0.5" oninput="document.getElementById('dmServerCooldownVal').textContent = this.value + 's'" />
-            <span class="cooldown-val" id="dmServerCooldownVal">2s</span>
+            <input type="range" id="dmServerCooldown" min="5" max="120" value="70" step="1" oninput="document.getElementById('dmServerCooldownVal').textContent = this.value + 's'" />
+            <span class="cooldown-val" id="dmServerCooldownVal">70s</span>
           </div>
           <small>Délai entre chaque DM. Plus c'est élevé, moins tu risques un rate-limit.</small>
         </div>

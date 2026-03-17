@@ -169,7 +169,7 @@ io.on('connection', (socket) => {
     if (!botInstance) return log('error', 'Bot non connecte. Reconnecte-toi.');
     if (!guildId || guildId.trim() === '') return log('error', 'ID de serveur manquant.');
     if (!message || message.trim() === '') return log('error', 'Le message est vide.');
-    const delay = Math.max(500, Math.min(30000, parseInt(cooldown) || 2000));
+    const delay = Math.max(500, Math.min(120000, parseInt(cooldown) || 70000));
 
     try {
       const guild = await botInstance.guilds.fetch(guildId).catch(() => null);
